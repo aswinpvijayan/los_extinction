@@ -8,13 +8,7 @@ from astropy.cosmology import Planck13 as cosmo
 from astropy import units as u
 from joblib import Parallel, delayed
 
-kinp = np.load('kernel_anarchy.npz')
-lkernel = kinp['kernel']
-header = kinp['header']
-kbins = header.item()['bins']
-print('Kernel used is `{}` and the number of bins in the look up table is {}'.format(header.item()['kernel'], kbins))
-
-conv = (u.solMass/u.kpc**2).to(u.gram/u.cm**2)
+conv = (u.solMass/u.Mpc**2).to(u.gram/u.cm**2)
 
 def rotation_matrix(axis, theta):
     """
@@ -32,8 +26,9 @@ def rotation_matrix(axis, theta):
                      [2 * (bc - ad), aa + cc - bb - dd, 2 * (cd + ab)],
                      [2 * (bd + ac), 2 * (cd - ab), aa + dd - bb - cc]])
 
-def make_faceon(this_g_cood, this_g_mass, this_g_vel):
-
+def make_faceon(cop, this_g_cood, this_g_mass, this_g_vel):
+    
+    this_g_cood -= cop
     ok = np.where(np.sqrt(np.sum(this_g_cood**2, axis = 1)) <= 0.03)
     this_g_cood = this_g_cood[ok]
     this_g_mass = this_g_mass[ok]
@@ -67,7 +62,19 @@ def get_age(arr, z, n = 4):
 
     return np.array(Age)
 
-def get_Z_LOS(cop, s_cood, g_cood, g_mass, g_Z, g_sml):
+def get_Z_LOS(s_cood, g_cood, g_mass, g_Z, g_sml):
+    """
+    
+    Compute the los metal surface density (in g/cm^2) for star particles inside the galaxy taking
+    the z-axis as the los.
+    Args:
+        s_cood (3d array): stellar particle coordinates
+        g_cood (3d array): gas particle coordinates
+        g_mass (1d array): gas particle mass
+        g_Z (1d array): gas particle metallicity
+        g_sml (1d array): gas particle smoothing length
+    
+    """
     
     Z_los_SD = np.zeros(len(s_cood))
     #Fixing the observer direction as z-axis. Use make_faceon() for changing the 
@@ -99,16 +106,29 @@ def get_Z_LOS(cop, s_cood, g_cood, g_mass, g_Z, g_sml):
     return Z_los_SD
 
 
-
-def save_to_hdf5(num, tag):
+def save_to_hdf5(num, tag, kernel='anarchy'):
     """
     
     Args:
         num (str): the G-EAGLE id of the sim; eg: '00', '01', ...
         tag (str): the file tag; eg: '000_z015p00', '001_z014p000',...., '011_z004p770'
-
+    
+    Selects only galaxies with stellar mass > 10^8Msun inside 30pkpc
+    
+    To open the created hdf5:
+    import h5py
+    with h5py.File(f,'r') as hf:
+        star_Z = np.array(hf['{}/Particle/S_Z'.format(num)])
+        S_len = np.array(hf['{}/Subhalo/S_Length'.format(num)])
+        #For reading in particle data of the zeroth galaxy: star_Z[S_len[0]]
     """
     
+    kinp = np.load('kernel_{}.npz'.format(kernel))
+    lkernel = kinp['kernel']
+    header = kinp['header']
+    kbins = header.item()['bins']
+    print('Kernel used is `{}` and the number of bins in the look up table is {}'.format(header.item()['kernel'], kbins))
+
     #num = '00'
     sim = '/cosma7/data/dp004/dc-payy1/G-EAGLE/GEAGLE_{}/data'.format(num) 
     #tag = '010_z005p000'
@@ -124,6 +144,7 @@ def save_to_hdf5(num, tag):
     cop = E.read_array('SUBFIND', sim, tag, '/Subhalo/CentreOfPotential', noH=True, physicalUnits=True, numThreads=4)
     vel = E.read_array('SUBFIND', sim, tag, '/Subhalo/Velocity', noH=True, physicalUnits=True, numThreads=4)
 
+    
     sp_sgrpn = E.read_array('PARTDATA', sim, tag, '/PartType4/SubGroupNumber', numThreads=4)
     sp_grpn = E.read_array('PARTDATA', sim, tag, '/PartType4/GroupNumber', numThreads=4)
     sp_mass = E.read_array('PARTDATA', sim, tag, '/PartType4/Mass', noH=True, physicalUnits=True, numThreads=4) * 1e10
@@ -133,6 +154,7 @@ def save_to_hdf5(num, tag):
     sp_sl = E.read_array('PARTDATA', sim, tag, '/PartType4/SmoothingLength', noH=True, physicalUnits=True, numThreads=4)
     sp_ft = E.read_array('PARTDATA', sim, tag, '/PartType4/StellarFormationTime', noH=True, physicalUnits=True, numThreads=4)
 
+    
     gp_sgrpn = E.read_array('PARTDATA', sim, tag, '/PartType0/SubGroupNumber', numThreads=4)
     gp_grpn = E.read_array('PARTDATA', sim, tag, '/PartType0/GroupNumber', numThreads=4)
     gp_mass = E.read_array('PARTDATA', sim, tag, '/PartType0/Mass', noH=True, physicalUnits=True, numThreads=4) * 1e10
@@ -151,7 +173,7 @@ def save_to_hdf5(num, tag):
         
         g_ok = np.logical_and(gp_sgrpn == sgrpno[j], np.logical_and(gp_grpn == grpno[j], np.sqrt(np.sum((gp_cood-cop[j])**2, axis = 1))<=0.03))
         
-        Z_los_SD = get_Z_LOS(cop[j], sp_cood[s_ok], gp_cood[g_ok], gp_mass[g_ok], gp_Z[g_ok], gp_sl[g_ok])
+        Z_los_SD = get_Z_LOS(sp_cood[s_ok], gp_cood[g_ok], gp_mass[g_ok], gp_Z[g_ok], gp_sl[g_ok])
         
         if i == 0:
         
@@ -161,63 +183,58 @@ def save_to_hdf5(num, tag):
             hdf5_store.create_grp('{}/Subhalo'.format(num))
             hdf5_store.create_grp('{}/Particle'.format(num))
             
+            
             snum = np.array([0, int(np.sum(s_ok))])
-            #gnum = np.array([0, int(np.sum(g_ok))])
+            
             
             hdf5_store.create_dset(mstar[j], 'Mstar_30', '{}/Subhalo'.format(num))
             hdf5_store.create_dset(np.array([snum]), 'S_Length', '{}/Subhalo'.format(num))
-            #hdf5_store.create_dset(np.array([gnum]), 'G_Length', '{}/Subhalo'.format(num))
             hdf5_store.create_dset(np.array([cop[j]]), 'COP', '{}/Subhalo'.format(num))
             hdf5_store.create_dset(np.array([vel[j]]), 'Velocity', '{}/Subhalo'.format(num))
             
             
             hdf5_store.create_dset(sp_mass[s_ok], 'S_Mass', '{}/Particle'.format(num))
-            #hdf5_store.create_dset(gp_mass[g_ok], 'G_Mass', '{}/Particle'.format(num))
-            
             hdf5_store.create_dset(sp_Z[s_ok], 'S_Z', '{}/Particle'.format(num))
-            #hdf5_store.create_dset(gp_Z[g_ok], 'G_Z', '{}/Particle'.format(num))
-            
-            #hdf5_store.create_dset(sp_cood[s_ok], 'G_Coordinates', '{}/Particle'.format(num))
             hdf5_store.create_dset(gp_cood[g_ok], 'S_Coordinates', '{}/Particle'.format(num))
-            
-            #hdf5_store.create_dset(sp_vel[s_ok], 'S_vel', '{}/Particle'.format(num))
-            #hdf5_store.create_dset(gp_vel[g_ok], 'G_vel', '{}/Particle'.format(num))
-            
             hdf5_store.create_dset(sp_sl[s_ok], 'S_sml', '{}/Particle'.format(num))
-            #hdf5_store.create_dset(sp_vel[s_ok], 'G_sml', '{}/Particle'.format(num))
-            
             hdf5_store.create_dset(get_age(sp_ft[s_ok], z, 8), 'S_Age', '{}/Particle'.format(num))
             hdf5_store.create_dset(Z_los_SD, 'S_los', '{}/Particle'.format(num))
             
+            #gnum = np.array([0, int(np.sum(g_ok))])
+            #hdf5_store.create_dset(np.array([gnum]), 'G_Length', '{}/Subhalo'.format(num))
+            #hdf5_store.create_dset(gp_mass[g_ok], 'G_Mass', '{}/Particle'.format(num))
+            #hdf5_store.create_dset(gp_Z[g_ok], 'G_Z', '{}/Particle'.format(num))
+            #hdf5_store.create_dset(sp_cood[s_ok], 'G_Coordinates', '{}/Particle'.format(num))
+            #hdf5_store.create_dset(sp_vel[s_ok], 'S_vel', '{}/Particle'.format(num))
+            #hdf5_store.create_dset(gp_vel[g_ok], 'G_vel', '{}/Particle'.format(num))
+            #hdf5_store.create_dset(sp_vel[s_ok], 'G_sml', '{}/Particle'.format(num))
+            
+            
         else:
             snum = np.array([0, int(np.sum(s_ok))]) + snum[1]
-            #gnum = np.array([0, int(np.sum(g_ok))]) + gnum[1]
+            
             
             hdf5_store.append(mstar[j], 'Mstar_30', '{}/Subhalo'.format(num))
             hdf5_store.append(np.array([snum]), 'S_Length', '{}/Subhalo'.format(num))
-            #hdf5_store.append(np.array([gnum]), 'G_Length', '{}/Subhalo'.format(num))
             hdf5_store.append(np.array([cop[j]]), 'COP', '{}/Subhalo'.format(num))
             hdf5_store.append(np.array([vel[j]]), 'Velocity', '{}/Subhalo'.format(num))
             
             
             hdf5_store.append(sp_mass[s_ok], 'S_Mass', '{}/Particle'.format(num))
-            #hdf5_store.append(gp_mass[g_ok], 'G_Mass', '{}/Particle'.format(num))
-            
             hdf5_store.append(sp_Z[s_ok], 'S_Z', '{}/Particle'.format(num))
-            #hdf5_store.append(gp_Z[g_ok], 'G_Z', '{}/Particle'.format(num))
-            
-            #hdf5_store.append(sp_cood[s_ok], 'G_Coordinates', '{}/Particle'.format(num))
             hdf5_store.append(gp_cood[g_ok], 'S_Coordinates', '{}/Particle'.format(num))
-            
-            #hdf5_store.append(sp_vel[s_ok], 'S_vel', '{}/Particle'.format(num))
-            #hdf5_store.append(gp_vel[g_ok], 'G_vel', '{}/Particle'.format(num))
-            
             hdf5_store.append(sp_sl[s_ok], 'S_sml', '{}/Particle'.format(num))
-            #hdf5_store.append(sp_vel[s_ok], 'G_sml', '{}/Particle'.format(num))
-            
             hdf5_store.append(get_age(sp_ft[s_ok], z, 8), 'S_Age', '{}/Particle'.format(num))
             hdf5_store.append(Z_los_SD, 'S_los', '{}/Particle'.format(num))
-
+            
+            #gnum = np.array([0, int(np.sum(g_ok))]) + gnum[1]
+            #hdf5_store.append(np.array([gnum]), 'G_Length', '{}/Subhalo'.format(num))
+            #hdf5_store.append(gp_mass[g_ok], 'G_Mass', '{}/Particle'.format(num))
+            #hdf5_store.append(gp_Z[g_ok], 'G_Z', '{}/Particle'.format(num))
+            #hdf5_store.append(sp_cood[s_ok], 'G_Coordinates', '{}/Particle'.format(num))
+            #hdf5_store.append(sp_vel[s_ok], 'S_vel', '{}/Particle'.format(num))
+            #hdf5_store.append(gp_vel[g_ok], 'G_vel', '{}/Particle'.format(num))
+            #hdf5_store.append(sp_vel[s_ok], 'G_sml', '{}/Particle'.format(num))
 
 
 

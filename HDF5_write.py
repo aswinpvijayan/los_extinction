@@ -36,29 +36,31 @@ class HDF5_write(object):
                 sys.exit()
             
     
-    def create_dset(self, values, dataset, group = 'None', dtype=np.float32):
+    def create_dset(self, values, dataset, group = 'None', dtype=np.float64):
         with h5py.File(self.datapath, mode='a') as h5f:
             shape = np.shape(values)
             if group == 'None':
                 dset = h5f.create_dataset(
                 dataset,
-                shape=(0,) + shape[1:],
+                shape=shape,
                 maxshape=(None, ) + shape[1:],
                 dtype=dtype,
-                compression=self.compression)
+                compression=self.compression,
+                data=values)
             else:
                 try:
                     dset = h5f[group].create_dataset(
                     dataset,
-                    shape=(0,) + shape[1:],
+                    shape=shape,
                     maxshape=(None,) + shape[1:],
                     dtype=dtype,
-                    compression=self.compression)
+                    compression=self.compression,
+                    data=values)
                 except:
                     print("Oh! Oh! something went wrong while creating {}/{} or it already exists.\nNo value was written into the dataset.".format(group, dataset))
-                    sys.exit()
+                    sys.exit
                     
-        self.append(values, dataset, group)
+        #self.append(values, dataset, group)
     
     def append(self, values, dataset, group = 'None'):
         with h5py.File(self.datapath, mode='a') as h5f:
@@ -78,10 +80,10 @@ class HDF5_write(object):
 
 if __name__== "__main__": 
 
-    shape = (20,3,)
+    shape = (10,)
     hdf5_store = HDF5_write('hdf5_store.hdf5')
-    hdf5_store.create_grp('Stars')
-    hdf5_store.create_dset(np.random.random(shape), 'X', 'Stars')
+    hdf5_store.create_grp('Gas')
+    hdf5_store.create_dset(np.random.random(shape), 'X', 'Gas')
     for _ in range(10):
-        hdf5_store.append(np.random.random(shape), 'X', 'Stars')
+        hdf5_store.append(np.random.random(shape), 'X', 'Gas')
 

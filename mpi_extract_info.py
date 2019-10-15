@@ -176,19 +176,23 @@ def extract_info(num, tag, kernel='sph-anarchy', inp='GEAGLE'):
     lkernel = kinp['kernel']
     header = kinp['header']
     kbins = header.item()['bins']
-    if rank == 0:
-        print('\n\t\t\t###################################\nKernel used is `{}` and the number of bins in the look up table is {}\n\t\t\t###################################\n'.format(header.item()['kernel'], kbins))
     
     num = str(num)
+
     if inp == 'GEAGLE':
+
         if len(num) == 1:
             num =  '0'+num
         sim = '/cosma7/data/dp004/dc-payy1/G-EAGLE/GEAGLE_{}/data'.format(num) 
+
     else:
-        inp = 0#int(input('Enter the appropriate number for the required cosmological box: \n0 - EAGLE-REF 100 \n1 - AGN-dT9 50\n'))
+
         sim = ['/cosma5/data/Eagle/ScienceRuns/Planck1/L0100N1504/PE/REFERENCE/data/', '/cosma5/data/Eagle/ScienceRuns/Planck1/L0050N0752/PE/AGNdT9/data/'][inp]
     
-    print (sim)
+    if rank == 0:
+        print('\n\t\t\t###################################\nKernel used is `{}` and the number of bins in the look up table is {}\n\t\t\t###################################\n'.format(header.item()['kernel'], kbins))
+        print ('Sim location = ', sim)
+    
     z = E.read_header('SUBFIND', sim, tag, 'Redshift')
     mstar = E.read_array('SUBFIND', sim, tag, '/Subhalo/ApertureMeasurements/Mass/030kpc', numThreads=4, noH=True, physicalUnits=True)[:,4]*1e10
     sgrpno = E.read_array('SUBFIND', sim, tag, '/Subhalo/SubGroupNumber', numThreads=4)
@@ -411,11 +415,10 @@ def save_to_hdf5(num, tag, kernel='sph-anarchy', inp='GEAGLE'):
     if inp == 'GEAGLE':
         if len(num) == 1:
             num =  '0'+num
-        filename = 'data2/GEAGLE_{}_sp_info.hdf5'.format(num)
+        filename = 'data/GEAGLE_{}_sp_info.hdf5'.format(num)
     else:
-        inp = 0#int(input('Enter the appropriate number for the required cosmological box: \n0 - EAGLE-REF 100 \n1 - AGN-dT9 50\n'))
         sim = ['/cosma5/data/Eagle/ScienceRuns/Planck1/L0100N1504/PE/REFERENCE/data', '/cosma5/data/Eagle/ScienceRuns/Planck1/L0050N0752/PE/AGNdT9/data/'][inp]
-        filename = 'data2/EAGLE_{}_sp_info.hdf5'.format(['REF', 'AGNdT9'][inp])
+        filename = 'data/EAGLE_{}_sp_info.hdf5'.format(['REF', 'AGNdT9'][inp])
     
     ## MPI parameters
     comm = MPI.COMM_WORLD

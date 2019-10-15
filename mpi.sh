@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH -A dp004
 #SBATCH -p cosma6
-#SBATCH --job-name=py
+#SBATCH --job-name=mpipy
 #SBATCH -t 0-4:00
 #SBATCH --ntasks 16
 #SBATCH --cpus-per-task=1

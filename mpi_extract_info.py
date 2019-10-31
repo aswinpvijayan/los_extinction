@@ -209,42 +209,33 @@ def extract_info(num, tag, kernel='sph-anarchy', inp='GEAGLE'):
 
     cop = E.read_array('SUBFIND', sim, tag, '/Subhalo/CentreOfPotential', noH=True, physicalUnits=True, numThreads=4)
 
-    sp_cood = E.read_array('PARTDATA', sim, tag, '/PartType4/Coordinates', noH=False, physicalUnits=False, numThreads=4)
-    gp_cood = E.read_array('PARTDATA', sim, tag, '/PartType0/Coordinates', noH=False, physicalUnits=False, numThreads=4)
-    if inp == 'GEAGLE':
-        dist = max(14, min_dist-2)
-        sind =  np.where(norm(sp_cood-cen,axis=1)<=dist)[0]
-        gind =  np.where(norm(gp_cood-cen,axis=1)<=dist)[0]
-    else:
-        sind = np.ones(len(sp_cood), dtype=bool)
-        gind = np.ones(len(gp_cood), dtype=bool)
+    sp_cood = E.read_array('PARTDATA', sim, tag, '/PartType4/Coordinates', noH=True, physicalUnits=True, numThreads=4)
+    gp_cood = E.read_array('PARTDATA', sim, tag, '/PartType0/Coordinates', noH=True, physicalUnits=True, numThreads=4)
 
-    sp_cood = E.read_array('PARTDATA', sim, tag, '/PartType4/Coordinates', noH=True, physicalUnits=True, numThreads=4)[sind]
-    gp_cood = E.read_array('PARTDATA', sim, tag, '/PartType0/Coordinates', noH=True, physicalUnits=True, numThreads=4)[gind]
-
-    sp_sgrpn = E.read_array('PARTDATA', sim, tag, '/PartType4/SubGroupNumber', numThreads=4)[sind]
-    sp_grpn = E.read_array('PARTDATA', sim, tag, '/PartType4/GroupNumber', numThreads=4)[sind]
-    sp_mass = E.read_array('PARTDATA', sim, tag, '/PartType4/Mass', noH=True, physicalUnits=True, numThreads=4)[sind] * 1e10
-    sp_Z = E.read_array('PARTDATA', sim, tag, '/PartType4/Metallicity', numThreads=4)[sind]
+    sp_sgrpn = E.read_array('PARTDATA', sim, tag, '/PartType4/SubGroupNumber', numThreads=4)
+    sp_grpn = E.read_array('PARTDATA', sim, tag, '/PartType4/GroupNumber', numThreads=4)
+    sp_mass = E.read_array('PARTDATA', sim, tag, '/PartType4/Mass', noH=True, physicalUnits=True, numThreads=4) * 1e10
+    sp_Z = E.read_array('PARTDATA', sim, tag, '/PartType4/Metallicity', numThreads=4)
     #sp_vel = E.read_array('PARTDATA', sim, tag, '/PartType4/Velocity', noH=True, physicalUnits=True, numThreads=4)
-    sp_sl = E.read_array('PARTDATA', sim, tag, '/PartType4/SmoothingLength', noH=True, physicalUnits=True, numThreads=4)[sind]
-    sp_ft = E.read_array('PARTDATA', sim, tag, '/PartType4/StellarFormationTime', noH=True, physicalUnits=True, numThreads=4)[sind]
+    sp_sl = E.read_array('PARTDATA', sim, tag, '/PartType4/SmoothingLength', noH=True, physicalUnits=True, numThreads=4)
+    sp_ft = E.read_array('PARTDATA', sim, tag, '/PartType4/StellarFormationTime', noH=True, physicalUnits=True, numThreads=4)
 
 
-    gp_sgrpn = E.read_array('PARTDATA', sim, tag, '/PartType0/SubGroupNumber', numThreads=4)[gind]
-    gp_grpn = E.read_array('PARTDATA', sim, tag, '/PartType0/GroupNumber', numThreads=4)[gind]
-    gp_mass = E.read_array('PARTDATA', sim, tag, '/PartType0/Mass', noH=True, physicalUnits=True, numThreads=4)[gind] * 1e10
-    gp_Z = E.read_array('PARTDATA', sim, tag, '/PartType0/Metallicity', numThreads=4)[gind]
+    gp_sgrpn = E.read_array('PARTDATA', sim, tag, '/PartType0/SubGroupNumber', numThreads=4)
+    gp_grpn = E.read_array('PARTDATA', sim, tag, '/PartType0/GroupNumber', numThreads=4)
+    gp_mass = E.read_array('PARTDATA', sim, tag, '/PartType0/Mass', noH=True, physicalUnits=True, numThreads=4) * 1e10
+    gp_Z = E.read_array('PARTDATA', sim, tag, '/PartType0/Metallicity', numThreads=4)
     #gp_vel = E.read_array('PARTDATA', sim, tag, '/PartType0/Velocity', noH=True, physicalUnits=True, numThreads=4)
-    gp_sl = E.read_array('PARTDATA', sim, tag, '/PartType0/SmoothingLength', noH=True, physicalUnits=True, numThreads=4)[gind]
+    gp_sl = E.read_array('PARTDATA', sim, tag, '/PartType0/SmoothingLength', noH=True, physicalUnits=True, numThreads=4)
 
     gc.collect()
+
+    comm.Barrier()
 
     if rank == 0:
         print("Extracting required properties for {} subhalos from G-EAGLE_{} at z = {}".format(len(indices), num, z))
 
     part = int(len(indices)/size)
-    comm.Barrier()
 
     if rank!=size-1:
         thisok = indices[rank*part:(rank+1)*part]
@@ -415,7 +406,7 @@ def save_to_hdf5(num, tag, kernel='sph-anarchy', inp='GEAGLE'):
     if inp == 'GEAGLE':
         if len(num) == 1:
             num =  '0'+num
-        filename = 'data/GEAGLE_{}_sp_info.hdf5'.format(num)
+        filename = 'data1/GEAGLE_{}_sp_info.hdf5'.format(num)
     else:
         sim = ['/cosma5/data/Eagle/ScienceRuns/Planck1/L0100N1504/PE/REFERENCE/data', '/cosma5/data/Eagle/ScienceRuns/Planck1/L0050N0752/PE/AGNdT9/data/'][inp]
         filename = 'data/EAGLE_{}_sp_info.hdf5'.format(['REF', 'AGNdT9'][inp])

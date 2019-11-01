@@ -60,6 +60,10 @@ class HDF5_write(object):
                     dtype=dtype,
                     compression=self.compression,
                     data=values)
+                    
+                    dset.attrs['Description'] = desc
+                    dset.attrs['Units'] = unit
+                
                 except:
                     print("Oh! Oh! something went wrong while creating {}/{} or it already exists.\nNo value was written into the dataset.".format(group, dataset))
                     sys.exit
@@ -87,6 +91,6 @@ if __name__== "__main__":
     shape = (10,)
     hdf5_store = HDF5_write('hdf5_store.hdf5')
     hdf5_store.create_grp('Gas')
-    hdf5_store.create_dset(np.random.random(shape), 'X', 'Gas')
+    hdf5_store.create_dset(np.random.random(shape), 'X', 'Gas', desc = 'gas particles', unit = 'Msun')
     for _ in range(10):
         hdf5_store.append(np.random.random(shape), 'X', 'Gas')
